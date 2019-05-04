@@ -3,7 +3,7 @@
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
 #include <ArduinoJson.h>
 
-#define TRIGGER_PIN D8
+#define TRIGGER_PIN D0
 #define RELAY_PIN D7
 
 SocketIoClient webSocket;
@@ -57,7 +57,7 @@ void InitSetting()
 
   WiFiManagerParameter socket_server("SocketServer", "socket server", "server.serpek.com", 64);
   wifiManager.addParameter(&socket_server);
-  WiFiManagerParameter socket_server_port("SocketServerPort", "socket server port", "3000", 324);
+  WiFiManagerParameter socket_server_port("SocketServerPort", "socket server port", "3000", 32);
   wifiManager.addParameter(&socket_server_port);
   WiFiManagerParameter socket_hostname("Socket Hostname", "socket hostname", "socket", 32);
   wifiManager.addParameter(&socket_hostname);
@@ -90,9 +90,9 @@ void InitSetting()
 }
 
 void listenConnect(const char * payload, size_t length) {
-    Serial.println("connected Socket...");
-    Serial.println(payload);
-    webSocket.emit("status", sendStatus());
+  Serial.println("connected Socket...");
+  Serial.println(payload);
+  webSocket.emit("status", sendStatus());
 }
 
 void listenDevice(const char * payload, size_t length) {
@@ -105,16 +105,19 @@ void listenDevice(const char * payload, size_t length) {
     Serial.println(error.c_str());
     return;
   }
-  const char* message_token = doc["message"]["token"];
-  JsonObject message_data = doc["message"]["data"];
-  const char* message_data__id = message_data["_id"];
-  const char* message_data_type = message_data["type"];
-  int message_data_value = message_data["value"];
 
-  String s(message_token);
+  const char* token = doc["token"]; // "5678"
+  const char* data_type = doc["data"]["type"]; // "Number"
+  int data_value = doc["data"]["value"]; // 0
+  const char* event = doc["event"]; // "device"
+  const char* emitter = doc["emitter"]; // "io"
 
+  String s(token);
+  Serial.println(s);
+  Serial.println(TokenKey);
+  Serial.println(payload);
   if (s == TokenKey) {
-    uint8_t value = message_data_value ? LOW : HIGH;
+    uint8_t value = data_value ? LOW : HIGH;
     if (relayValue != value) {
       relayValue = value;
       digitalWrite(RELAY_PIN, relayValue);
@@ -126,7 +129,7 @@ const char* sendStatus() {
   StaticJsonDocument<256> doc;
   doc["token"] = TokenKey;
   JsonObject data = doc.createNestedObject("data");
-  data["type"] = "int";
+  data["type"] = "Number";
   data["value"] = relayValue;
   char json_string[256];
   serializeJson(doc, json_string);
