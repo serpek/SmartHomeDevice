@@ -126,7 +126,7 @@ void listenDevice(const char * payload, size_t length) {
 
 const char* sendStatus() {
   StaticJsonDocument<256> doc;
-  doc["token"] = TokenKey;
+  doc["token"] = socket_token.getValue();
   JsonObject data = doc.createNestedObject("data");
   data["type"] = "Number";
   data["value"] = relayValue;
