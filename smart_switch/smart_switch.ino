@@ -105,17 +105,17 @@ void listenDevice(const char * payload, size_t length) {
     return;
   }
 
-  const char* token = doc["token"]; // "5678"
-  const char* data_type = doc["data"]["type"]; // "Number"
+  const char *token = socket_token.getValue();
+  const char *tokenData = doc["token"]; // "5678"
+  const char *data_type = doc["data"]["type"]; // "Number"
   int data_value = doc["data"]["value"]; // 0
-  const char* event = doc["event"]; // "device"
-  const char* emitter = doc["emitter"]; // "io"
+  const char *event = doc["event"]; // "device"
+  const char *emitter = doc["emitter"]; // "io"
 
-  String s(token);
-  Serial.println(s);
-  Serial.println(TokenKey);
+  Serial.println(token);
+  Serial.println(tokenData);
   Serial.println(payload);
-  if (s == TokenKey) {
+  if (token == tokenData) {
     uint8_t value = data_value ? LOW : HIGH;
     if (relayValue != value) {
       relayValue = value;
