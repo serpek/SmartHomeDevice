@@ -13,8 +13,14 @@ WiFiManager wifiManager;
 //Device Attributes
 String SSIDName = "BAMS_DEVICE_";
 String ChipId = "ESP_";
-String TokenKey = "";
+String socketUrl = "/socket.io/?transport=websocket&type=device&token=";
 uint8_t relayValue;
+
+WiFiManagerParameter socket_server("SocketServer", "socket server", "server.serpek.com", 64);
+WiFiManagerParameter socket_server_port("SocketServerPort", "socket server port", "3000", 32);
+WiFiManagerParameter socket_hostname("Socket Hostname", "socket hostname", "socket", 32);
+WiFiManagerParameter socket_channel("Socket Channel", "socket channel", "device", 32);
+WiFiManagerParameter socket_token("Socket Token", "socket token", "5678", 32);
 
 void reconnect();
 void resetButton();
@@ -55,33 +61,26 @@ void InitSetting()
 
   WiFi.hostname(SSIDName);
 
-  WiFiManagerParameter socket_server("SocketServer", "socket server", "server.serpek.com", 64);
   wifiManager.addParameter(&socket_server);
-  WiFiManagerParameter socket_server_port("SocketServerPort", "socket server port", "3000", 32);
   wifiManager.addParameter(&socket_server_port);
-  WiFiManagerParameter socket_hostname("Socket Hostname", "socket hostname", "socket", 32);
   wifiManager.addParameter(&socket_hostname);
-  WiFiManagerParameter socket_channel("Socket Channel", "socket channel", "device", 32);
   wifiManager.addParameter(&socket_channel);
-  WiFiManagerParameter socket_token("Socket Token", "socket token", "5678", 32);
   wifiManager.addParameter(&socket_token);
 
   wifiManager.setTimeout(120);
 
   if (wifiManager.autoConnect(SSIDName.c_str()))
   {
-    const char* token = socket_token.getValue();
-    const char* serverName = socket_server.getValue();
+    const char *token = socket_token.getValue();
+    const char *serverName = socket_server.getValue();
     const int port = atol(socket_server_port.getValue());
-    const char* room = socket_hostname.getValue();
-    const char* channelName = socket_channel.getValue();
-    const char* url = strcat("/socket.io/?transport=websocket&type=device&token=", token);
-
-    TokenKey = String(token);
+    const char *room = socket_hostname.getValue();
+    const char *channelName = socket_channel.getValue();
+    socketUrl += token;
 
     webSocket.on("connect", listenConnect);
     webSocket.on(channelName, listenDevice);
-    webSocket.begin(serverName, port, url);
+    webSocket.begin(serverName, port, socketUrl.c_str());
 
     Serial.println("connected...");
   }
