@@ -1,3 +1,4 @@
+#include <FS.h>                   //this needs to be first, or it all crashes and burns...
 #include <SocketIoClient.h>
 #include <ESP8266WiFi.h> //ESP8266 Core WiFi Library (you most likely already have this in your sketch)
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
@@ -10,23 +11,39 @@ SocketIoClient webSocket;
 WiFiClient wifiClient;
 WiFiManager wifiManager;
 
+
 //Device Attributes
 String SSIDName = "BAMS_DEVICE_";
 String ChipId = "ESP_";
 String socketUrl = "/socket.io/?transport=websocket&type=device&token=";
 uint8_t relayValue;
 
-WiFiManagerParameter socket_server("SocketServer", "socket server", "server.serpek.com", 64);
-WiFiManagerParameter socket_server_port("SocketServerPort", "socket server port", "3000", 32);
-WiFiManagerParameter socket_hostname("Socket Hostname", "socket hostname", "socket", 32);
-WiFiManagerParameter socket_channel("Socket Channel", "socket channel", "device", 32);
-WiFiManagerParameter socket_token("Socket Token", "socket token", "5678", 32);
+//flag for saving data
+bool shouldSaveConfig = false;
+
+char token = "1234";
+char serverName = "217.61.105.44";
+int port = 3000;
+char room = "socket";
+char channelName = "device";
+
+WiFiManagerParameter socket_server("SocketServer", "socket server", serverName, 64);
+WiFiManagerParameter socket_server_port("SocketServerPort", "socket server port", port, 32);
+WiFiManagerParameter socket_hostname("Socket Hostname", "socket hostname", room, 32);
+WiFiManagerParameter socket_channel("Socket Channel", "socket channel", channelName, 32);
+WiFiManagerParameter socket_token("Socket Token", "socket token", token, 32);
 
 void reconnect();
 void resetButton();
 void InitSetting();
 void listenDevice(const char * payload, size_t length);
 void listenConnect(const char * payload, size_t length);
+
+//callback notifying us of the need to save config
+void saveConfigCallback () {
+  Serial.println("Should save config");
+  shouldSaveConfig = true;
+}
 
 void setup()
 {
@@ -37,6 +54,47 @@ void setup()
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
+
+  //clean FS, for testing
+  //SPIFFS.format();
+
+  //read configuration from FS json
+  Serial.println("mounting FS...");
+
+  if (SPIFFS.begin()) {
+    Serial.println("mounted file system");
+    if (SPIFFS.exists("/config.json")) {
+      //file exists, reading and loading
+      Serial.println("reading config file");
+      File configFile = SPIFFS.open("/config.json", "r");
+      if (configFile) {
+        Serial.println("opened config file");
+        size_t size = configFile.size();
+
+        // Allocate a buffer to store contents of the file.
+        std::unique_ptr<char[]> buf(new char[size]);
+        configFile.readBytes(buf.get(), size);
+        DynamicJsonDocument json(1024);
+        DeserializationError error = deserializeJson(json, buf.get());
+        if (error) {
+          Serial.println("failed to load json config");
+        } else {
+          Serial.println("\nparsed json");
+
+          strcpy(serverName, json["socket_server"]);
+          strcpy(port, json["socket_server_port"]);
+          strcpy(room, json["socket_hostname"]);
+          strcpy(channelName, json["socket_channel"]);
+          strcpy(token, json["socket_token"]);
+
+        } 
+        configFile.close();
+      }
+    }
+  } else {
+    Serial.println("failed to mount FS");
+  }
+  //end read
 
   relayValue = digitalRead(RELAY_PIN);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -60,6 +118,8 @@ void InitSetting()
   SSIDName += String(ESP.getChipId());
 
   WiFi.hostname(SSIDName);
+  //set config save notify callback
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
 
   wifiManager.addParameter(&socket_server);
   wifiManager.addParameter(&socket_server_port);
@@ -71,11 +131,27 @@ void InitSetting()
 
   if (wifiManager.autoConnect(SSIDName.c_str()))
   {
-    const char *token = socket_token.getValue();
-    const char *serverName = socket_server.getValue();
-    const int port = atol(socket_server_port.getValue());
-    const char *room = socket_hostname.getValue();
-    const char *channelName = socket_channel.getValue();
+    if (shouldSaveConfig) {
+      Serial.println("saving config");
+      DynamicJsonDocument jsonBuffer(1024);
+      JsonObject& json = jsonBuffer.createObject();
+      json["socket_token"] = token;
+      json["socket_server"] = serverName;
+      json["socket_server_port"] = port;
+      json["socket_hostname"] = room;
+      json["socket_channel"] = channelName;
+
+      File configFile = SPIFFS.open("/config.json", "w");
+      if (!configFile) {
+        Serial.println("failed to open config file for writing");
+      }
+      serializeJson(json, Serial);
+      serializeJson(json, configFile);
+
+      configFile.close();
+      //end save
+  }
+
     socketUrl += token;
 
     webSocket.on("connect", listenConnect);
